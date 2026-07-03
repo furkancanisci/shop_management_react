@@ -224,7 +224,7 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const baseUrl = apiBaseUrl || 'http://localhost:5001/api';
+  const baseUrl = apiBaseUrl || '/api';
 
   const apiRequest = async (path, options) => {
     const response = await fetch(`${baseUrl}${path}`, options);
