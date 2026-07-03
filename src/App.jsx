@@ -1,27 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminPanel from './AdminPanel';
 
+// Modern koltuk görselleri Unsplash'ten
 const venetianSofaImages = [
-  'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1200&q=80',
-  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=150&q=80',
-  'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=150&q=80',
-];
-
-
-// Başlangıç verileri (Vitrin özellikleri eklendi: isRecommended, isPopular, isOnlineSpecial)
-const initialProducts = [
-  { id: 1, category: 'Yatak Odası', name: 'Palermo Yatak Odası Takımı', priceStr: '38.900 TL', priceNum: 38900, oldPrice: '45.000 TL', img: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80', badge: 'YENİ', desc: 'Modern tasarımı ve ahşap dokusuyla Palermo, odanıza doğal bir ferahlık katar.', isRecommended: true, isPopular: false, isOnlineSpecial: false },
-  { id: 2, category: 'Oturma Grupları', name: 'Venedik Köşe Koltuk - Modern L-Tasarım', priceStr: '24.500 TL', priceNum: 24500, oldPrice: '28.000 TL', img: venetianSofaImages[0], badge: 'EN ÇOK SATAN', 
-    desc: 'Evinizin kalbinde, İtalyan estetiği ve üstün Türk işçiliğinin buluştuğu Venedik Köşe Koltuk, konforu yeniden tanımlıyor. Lüks modüler tasarımı, entegre teknolojik detayları ve dayanıklı kumaşıyla hem salonunuza şıklık katıyor hem de en keyifli anlarınıza eşlik ediyor. Masif ahşap iskeleti ve yüksek dansiteli süngerleri ile ömürlük bir konfor sunar.\nRealistik Ürün: Antrasit Gri, Pislozi koniur sanğu: 20.500 ml, Belunda sungizet angapır: 100 - slur sunar', detailImages: venetianSofaImages, isRecommended: true, isPopular: true, isOnlineSpecial: true },
-  { id: 3, category: 'Yemek Odası', name: 'Milano Yemek Odası', priceStr: '29.900 TL', priceNum: 29900, oldPrice: '', img: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=800&q=80', badge: 'ÇOK SATAN', desc: 'Mermer desenli üst yüzey ve şık sandalyeler.', isRecommended: true, isPopular: true, isOnlineSpecial: false },
-  { id: 4, category: 'Yatak Odası', name: 'Lidya Sürgülü Gardırop', priceStr: '16.500 TL', priceNum: 16500, oldPrice: '19.000 TL', img: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=800&q=80', badge: '%15 İNDİRİM', desc: 'Geniş iç hacmi ve sessiz kapanan kapak sistemi.', isRecommended: true, isPopular: true, isOnlineSpecial: false },
-  { id: 5, category: 'Tamamlayıcı Ürünler', name: 'Art Deco TV Ünitesi', priceStr: '8.250 TL', priceNum: 8250, oldPrice: '', img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80', badge: '', desc: 'Minimalist çizgiler ve metal ayak detayları.', isRecommended: false, isPopular: true, isOnlineSpecial: true },
-  { id: 6, category: 'Genç ve Çocuk Odası', name: 'Dynamic Genç Odası', priceStr: '21.000 TL', priceNum: 21000, oldPrice: '24.500 TL', img: 'https://images.unsplash.com/photo-1505693314120-0d443867891c?auto=format&fit=crop&w=800&q=80', badge: 'YENİ', desc: 'Çalışma masası, kitaplık ve yatak bir arada.', isRecommended: false, isPopular: false, isOnlineSpecial: true },
-  { id: 7, category: 'Yatak Odası', name: 'Comfort Ortopedik Yatak', priceStr: '7.400 TL', priceNum: 7400, oldPrice: '9.000 TL', img: 'https://images.unsplash.com/photo-1505692952047-1a78307da8f2?auto=format&fit=crop&w=800&q=80', badge: '', desc: 'Omurga destekli tam ortopedik yüzey.', isRecommended: false, isPopular: false, isOnlineSpecial: true },
-  { id: 8, category: 'Oturma Grupları', name: 'Krem Chester Koltuk', priceStr: '15.900 TL', priceNum: 15900, oldPrice: '', img: 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=800&q=80', badge: '', desc: 'Klasik chester stili, kolay silinebilir kumaş.', isRecommended: false, isPopular: false, isOnlineSpecial: true }
+  'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1200&q=80', // Ana Görsel (Daha modern gri)
+  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=150&q=80',  // Thumbnail 1
+  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=150&q=80',  // Thumbnail 2
+  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=150&q=80',  // Thumbnail 3
+  'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=150&q=80',  // Thumbnail 4
+  'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=150&q=80',  // Thumbnail 5
 ];
 
 const slides = [
@@ -141,24 +128,26 @@ function ProductCard({ product, onNavigateDetail, onAddToCart }) {
 }
 
 export default function App() {
-  // Sitenin kalbi olan ürün verilerini state içinde tutuyoruz.
+  // 1. Ürün verileri veritabanından gelecek
   const [products, setProducts] = useState([]);
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
-  const API_URL = `/api/products`;
+  
+  // ÖNEMLİ DEĞİŞİKLİK BURADA: Artık localhost değil, göreceli (relative) yol kullanıyoruz.
+  const API_URL = '/api/products';
 
   const fetchProducts = async () => {
     try {
       const res = await fetch(API_URL);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
       const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Veritabani baglanti hatasi:', err);
-      addToast('Urunler yuklenemedi. Lutfen daha sonra tekrar deneyin.');
-    }
+      setProducts(data);
+    } catch (err) { console.error("Veri çekme hatası:", err); }
   };
+
+  useEffect(() => { fetchProducts(); }, []);
+
+  // 2. CRUD Fonksiyonları (Admin'e gönderilecek)
+  const addProduct = async (p) => { await fetch(API_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }); fetchProducts(); };
+  const updateProduct = async (p) => { await fetch(`${API_URL}/${p.id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }); fetchProducts(); };
+  const deleteProduct = async (id) => { await fetch(`${API_URL}/${id}`, { method: 'DELETE' }); fetchProducts(); };
 
   const getInitialPage = () => {
     if (typeof window !== 'undefined' && window.location.pathname.includes('/admin')) {
@@ -185,55 +174,14 @@ export default function App() {
   const [selectedMaterial, setSelectedMaterial] = useState('Boşluk Dlanrı');
   const [selectedDetailImageIndex, setSelectedDetailImageIndex] = useState(0);
 
-  // Ürün referanslarını mockProducts yerine state'deki products'dan alıyoruz
-  const selectedProduct = useMemo(() => products.find((product) => product.id === selectedProductId) ?? products[0] ?? initialProducts[0], [selectedProductId, products]);
+  const selectedProduct = useMemo(() => products.find((product) => product.id === selectedProductId) ?? products[0], [selectedProductId, products]);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
-  const cartTotal = cart.reduce((sum, item) => sum + item.priceNum * item.qty, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (parseInt((item.priceStr || '0').replace(/[^0-9]/g, ''), 10) || 0) * item.qty, 0);
 
   const categoryProducts = useMemo(() => {
     const filtered = products.filter((product) => product.category === categoryName || categoryName === 'Tüm Ürünler' || product.name.includes(categoryName));
     return filtered.length > 0 ? filtered : products;
   }, [categoryName, products]);
-
-  // CRUD Fonksiyonları (Admin paneline gönderilecek)
-  const addProduct = async (newProduct) => {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newProduct)
-    });
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.error || `HTTP ${response.status}`);
-    }
-    await fetchProducts();
-  };
-
-  const updateProduct = async (updatedProduct) => {
-    const response = await fetch(`${API_URL}/${updatedProduct.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedProduct)
-    });
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.error || `HTTP ${response.status}`);
-    }
-    await fetchProducts();
-  };
-
-  const deleteProduct = async (id) => {
-    const response = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.error || `HTTP ${response.status}`);
-    }
-    await fetchProducts();
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -385,12 +333,17 @@ export default function App() {
   };
 
   const hero = slides[heroSlide];
-  const detailThumbsImages = selectedProduct.detailImages || Array.from({ length: 4 }, (_, index) => selectedProduct.img);
+  const detailThumbsImages = selectedProduct?.detailImages || Array.from({ length: 4 }, (_, index) => selectedProduct?.img);
   const detailThumbs = Array.from({ length: detailThumbsImages.length }, (_, index) => index);
 
   // ADMIN PANELI ÇAĞRISI (Ürünleri ve CRUD fonksiyonlarını prop olarak geçiyoruz)
   if (page === 'admin') {
-    return <AdminPanel navigate={navigate} addToast={addToast} products={products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} apiBaseUrl={API_BASE_URL} />;
+    return <AdminPanel navigate={navigate} addToast={addToast} products={products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} />;
+  }
+
+  // Henüz veriler gelmediyse yükleniyor ekranı göster
+  if (products.length === 0) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Veritabanına bağlanılıyor...</div>;
   }
 
   // MÜŞTERİ VİTRİNİ ARAYÜZÜ
@@ -780,7 +733,7 @@ export default function App() {
           </section>
         ) : null}
 
-        {page === 'detail' ? (
+        {page === 'detail' && selectedProduct ? (
           <section className="bg-white py-8 lg:py-16">
             <div className="container mx-auto px-4">
               <div className="text-xs text-gray-500 mb-8 pb-4 border-b border-gray-100">
@@ -792,7 +745,7 @@ export default function App() {
               <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
                 <div className="w-full lg:w-1/2">
                   <div className="rounded-xl overflow-hidden bg-gray-50 mb-6 h-[400px] md:h-[500px] flex items-center justify-center relative shadow-sm border border-gray-100">
-                    <img src={detailThumbsImages[selectedDetailImageIndex]} alt={selectedProduct.name} className="w-full h-full object-cover transition-opacity duration-300" />
+                    <img src={detailThumbsImages[selectedDetailImageIndex] || selectedProduct.img} alt={selectedProduct.name} className="w-full h-full object-cover transition-opacity duration-300" />
                   </div>
                   <div className="grid grid-cols-5 gap-3 md:gap-4 thumbnails-gallery">
                     {detailThumbs.map((index) => (
@@ -802,7 +755,7 @@ export default function App() {
                         onClick={() => setSelectedDetailImageIndex(index)}
                         className={`rounded-lg p-0.5 bg-white cursor-pointer transition-all h-20 md:h-24 flex items-center justify-center overflow-hidden border-2 ${index === selectedDetailImageIndex ? 'border-brand-main ring-2 ring-brand-main' : 'border-gray-200 hover:border-brand-main/50'}`}
                       >
-                        <img src={detailThumbsImages[index]} alt={`${selectedProduct.name} - ${index + 1}`} className="max-w-full max-h-full object-cover rounded-md" />
+                        <img src={detailThumbsImages[index] || selectedProduct.img} alt={`${selectedProduct.name} - ${index + 1}`} className="max-w-full max-h-full object-cover rounded-md" />
                       </button>
                     ))}
                   </div>
@@ -898,10 +851,10 @@ export default function App() {
                         <span className="transition group-open:rotate-180 text-brand-main"><i className="fas fa-chevron-down" /></span>
                       </summary>
                       <div className="text-gray-700 mt-5 text-base leading-relaxed pl-2 space-y-4 prose max-w-none">
-                        {selectedProduct.desc.split('\n').map((paragraph, index) => (
+                        {selectedProduct.desc?.split('\n').map((paragraph, index) => (
                             paragraph.startsWith('Realistik Ürün:') ? null : <p key={index}>{paragraph}</p>
                         ))}
-                        {selectedProduct.desc.includes('Realistik Ürün:') ? (
+                        {selectedProduct.desc?.includes('Realistik Ürün:') ? (
                             <p className="font-mono text-xs text-gray-500 bg-gray-100 p-3 rounded mt-2">
                                 {selectedProduct.desc.split('Realistik Ürün:')[1].trim()}
                             </p>
