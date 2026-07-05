@@ -17,7 +17,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type']
 }));
-app.use(express.json());
+
+// --- ÖNEMLİ: BASE64 İÇİN LİMİTLERİ 50MB'A ÇIKARDIK ---
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const dbConnectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_6tfr1dCGmyuJ@ep-steep-tooth-aswqg5cy-pooler.c-4.eu-central-1.aws.neon.tech/neondb';
 
@@ -550,7 +553,6 @@ app.get('/api/admin/stats', async (req, res) => {
 // React uygulamasını servis etmek için statik dosyaları yayınla
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// API harici gelen tüm istekleri React'e (index.html) yönlendir
 // API harici gelen tüm istekleri React'e (index.html) yönlendir
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));

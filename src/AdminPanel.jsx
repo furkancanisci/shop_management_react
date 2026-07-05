@@ -30,14 +30,14 @@ const fieldLabels = {
   name: 'Ad Soyad / Ürün Adı',
   categoryId: 'Kategori',
   category: 'Kategori',
-  priceStr: 'Fiyat',
-  oldPrice: 'Eski Fiyat',
-  img: 'Görsel URL',
-  badge: 'Rozet',
+  priceStr: 'Fiyat (Örn: 24.500 TL)',
+  oldPrice: 'Eski Fiyat (Örn: 28.000 TL)',
+  img: 'Ürün Görseli (Bilgisayardan Seç)',
+  badge: 'Rozet (Örn: YENİ)',
   desc: 'Açıklama',
-  isRecommended: 'Seçtiklerimiz',
-  isPopular: 'Popüler',
-  isOnlineSpecial: 'Online Özel',
+  isRecommended: 'Sizin İçin Seçtiklerimiz Vitrini',
+  isPopular: 'Popüler Ürünler Vitrini',
+  isOnlineSpecial: 'Online Özel Vitrini',
   email: 'E-posta',
   phone: 'Telefon',
   ordersCount: 'Sipariş Sayısı',
@@ -59,7 +59,7 @@ const formConfigs = {
     { name: 'categoryId', type: 'select' },
     { name: 'priceStr', type: 'text' },
     { name: 'oldPrice', type: 'text' },
-    { name: 'img', type: 'text' },
+    { name: 'img', type: 'image-upload' }, // Dosya yükleme tipi olarak değiştirdik
     { name: 'badge', type: 'text' },
     { name: 'desc', type: 'textarea' },
     { name: 'isRecommended', type: 'checkbox' },
@@ -108,33 +108,10 @@ const emptyForms = {
     isPopular: false,
     isOnlineSpecial: false
   },
-  customers: {
-    name: '',
-    email: '',
-    phone: '',
-    ordersCount: 0,
-    totalSpentNum: 0
-  },
-  orders: {
-    orderNo: '',
-    customerName: '',
-    date: '',
-    totalStr: '',
-    status: 'Hazırlanıyor',
-    statusColor: 'orange'
-  },
-  staff: {
-    name: '',
-    role: '',
-    email: '',
-    status: 'Aktif',
-    statusColor: 'green'
-  },
-  categories: {
-    name: '',
-    description: '',
-    sortOrder: 0
-  }
+  customers: { name: '', email: '', phone: '', ordersCount: 0, totalSpentNum: 0 },
+  orders: { orderNo: '', customerName: '', date: '', totalStr: '', status: 'Hazırlanıyor', statusColor: 'orange' },
+  staff: { name: '', role: '', email: '', status: 'Aktif', statusColor: 'green' },
+  categories: { name: '', description: '', sortOrder: 0 }
 };
 
 const requiredFields = {
@@ -210,7 +187,7 @@ function StatCard({ label, value, hint, icon, tone = 'gray' }) {
   );
 }
 
-export default function AdminPanel({ navigate, addToast, products, addProduct, updateProduct, deleteProduct, apiBaseUrl }) {
+export default function AdminPanel({ navigate, addToast, products, addProduct, updateProduct, deleteProduct }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showModal, setShowModal] = useState(false);
   const [editingType, setEditingType] = useState('products');
@@ -224,7 +201,8 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const baseUrl = apiBaseUrl || '/api';
+  // Veritabanı işlemleri için genel URL (localhost silindi)
+  const baseUrl = '/api';
 
   const apiRequest = async (path, options) => {
     const response = await fetch(`${baseUrl}${path}`, options);
@@ -296,29 +274,15 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
         detailImages: payload.detailImages ?? editingItem?.detailImages ?? []
       };
     }
-
     if (type === 'customers') {
-      return {
-        ...payload,
-        ordersCount: Number(payload.ordersCount) || 0,
-        totalSpentNum: Number(payload.totalSpentNum) || 0
-      };
+      return { ...payload, ordersCount: Number(payload.ordersCount) || 0, totalSpentNum: Number(payload.totalSpentNum) || 0 };
     }
-
     if (type === 'orders') {
-      return {
-        ...payload,
-        totalNum: parseMoney(payload.totalStr)
-      };
+      return { ...payload, totalNum: parseMoney(payload.totalStr) };
     }
-
     if (type === 'categories') {
-      return {
-        ...payload,
-        sortOrder: Number(payload.sortOrder) || 0
-      };
+      return { ...payload, sortOrder: Number(payload.sortOrder) || 0 };
     }
-
     return payload;
   };
 
@@ -335,6 +299,7 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
       }
 
       setValidationErrors({});
+      addToast('Kaydediliyor...');
 
       if (editingType === 'products') {
         if (editingItem) {
@@ -365,25 +330,18 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
       closeModal();
     } catch (error) {
       console.error('Kaydetme hatası:', error);
-      addToast('İşlem kaydedilemedi.');
+      addToast('İşlem kaydedilemedi. Hata: Yüklediğiniz görsel çok büyük olabilir.');
     }
   };
 
   const removeItem = async (type, item) => {
-    if (!window.confirm(`"${item.name || item.orderNo}" silinsin mi?`)) {
-      return;
-    }
-
+    if (!window.confirm(`"${item.name || item.orderNo}" silinsin mi?`)) return;
     try {
-      if (type === 'products') {
-        await deleteProduct(item.id);
-      } else {
-        await apiRequest(`/${type}/${item.id}`, { method: 'DELETE' });
-      }
+      if (type === 'products') await deleteProduct(item.id);
+      else await apiRequest(`/${type}/${item.id}`, { method: 'DELETE' });
       await refreshAdminData();
       addToast('Kayıt silindi!');
     } catch (error) {
-      console.error('Silme hatası:', error);
       addToast('Kayıt silinemedi.');
     }
   };
@@ -654,14 +612,48 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
                     {fieldLabels[field.name] || field.name}
                     {requiredFields[editingType].includes(field.name) ? <span className="text-red-500 ml-1">*</span> : null}
                   </label>
-                  {field.type === 'textarea' ? (
+                  
+                  {/* --- DOSYA YÜKLEME (BASE64) EKLENTİSİ --- */}
+                  {field.type === 'image-upload' ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className={`w-full border rounded p-2 text-sm ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
+                        onChange={(event) => {
+                          const file = event.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              // Resmi Base64 stringine çevirip formData'ya ekliyoruz
+                              setFormData({ ...formData, [field.name]: reader.result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      {formData[field.name] ? (
+                        <div className="mt-2 relative inline-block w-32 h-32 border border-gray-200 rounded p-1">
+                           <img src={formData[field.name]} alt="Önizleme" className="w-full h-full object-contain rounded" />
+                           <button 
+                             type="button" 
+                             onClick={() => setFormData({ ...formData, [field.name]: '' })} 
+                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
+                           >
+                             <i className="fas fa-times"></i>
+                           </button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                  ) : field.type === 'textarea' ? (
                     <textarea
-                      className={`w-full border rounded p-2 min-h-28 ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
+                      className={`w-full border rounded p-2 min-h-28 text-sm ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
                       value={formData[field.name] ?? ''}
                       onChange={(event) => setFormData({ ...formData, [field.name]: event.target.value })}
                     />
                   ) : field.type === 'checkbox' ? (
-                    <label className="flex items-center gap-2 text-sm border rounded p-3">
+                    <label className="flex items-center gap-2 text-sm border rounded p-3 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={Boolean(formData[field.name])}
@@ -671,7 +663,7 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
                     </label>
                   ) : field.type === 'select' ? (
                     <select
-                      className={`w-full border rounded p-2 ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
+                      className={`w-full border rounded p-2 text-sm ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
                       value={formData[field.name] ?? ''}
                       onChange={(event) => setFormData({ ...formData, [field.name]: event.target.value })}
                     >
@@ -686,8 +678,9 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
                   ) : (
                     <input
                       type={field.type === 'number' ? 'number' : 'text'}
-                      className={`w-full border rounded p-2 ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
+                      className={`w-full border rounded p-2 text-sm ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
                       value={formData[field.name] ?? ''}
+                      placeholder={fieldLabels[field.name]}
                       onChange={(event) => setFormData({ ...formData, [field.name]: event.target.value })}
                     />
                   )}
@@ -696,8 +689,8 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
               ))}
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={closeModal} className="px-4 py-2 bg-gray-200 rounded">İptal</button>
-              <button onClick={saveItem} className="px-4 py-2 bg-brand-main text-white rounded">Kaydet</button>
+              <button onClick={closeModal} className="px-5 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-colors">İptal</button>
+              <button onClick={saveItem} className="px-5 py-2 bg-brand-main text-white font-bold rounded-lg hover:bg-brand-secondary transition-colors shadow-md">Kaydet</button>
             </div>
           </div>
         </div>
