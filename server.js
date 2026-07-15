@@ -92,7 +92,9 @@ const seedTableIfEmpty = async (tableName, columns, rows) => {
 
 const mapProductRow = (product) => ({
   ...product,
-  detailImages: Array.isArray(product.detailImages) ? product.detailImages : []
+  detailImages: Array.isArray(product.detailImages) ? product.detailImages : [],
+  colorVariants: Array.isArray(product.colorVariants) ? product.colorVariants : [],
+  materialOptions: Array.isArray(product.materialOptions) ? product.materialOptions : []
 });
 
 const mapCategoryRow = (category) => ({
@@ -101,7 +103,9 @@ const mapCategoryRow = (category) => ({
 
 const withJsonbDetailImages = (rows) => rows.map((row) => ({
   ...row,
-  detailImages: JSON.stringify(row.detailImages ?? [])
+  detailImages: JSON.stringify(row.detailImages ?? []),
+  colorVariants: JSON.stringify(row.colorVariants ?? []),
+  materialOptions: JSON.stringify(row.materialOptions ?? [])
 }));
 
 // Veritabanı Tablosunu ve Başlangıç Verilerini Otomatik Oluşturma
@@ -122,13 +126,25 @@ const initDB = async () => {
         "isRecommended" BOOLEAN DEFAULT false,
         "isPopular" BOOLEAN DEFAULT false,
         "isOnlineSpecial" BOOLEAN DEFAULT false,
-        "detailImages" JSONB DEFAULT '[]'::jsonb
+        "detailImages" JSONB DEFAULT '[]'::jsonb,
+        "colorVariants" JSONB DEFAULT '[]'::jsonb,
+        "materialOptions" JSONB DEFAULT '[]'::jsonb
       )
     `);
 
     await pool.query(`
       ALTER TABLE products
       ADD COLUMN IF NOT EXISTS "detailImages" JSONB DEFAULT '[]'::jsonb
+    `);
+
+    await pool.query(`
+      ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS "colorVariants" JSONB DEFAULT '[]'::jsonb
+    `);
+
+    await pool.query(`
+      ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS "materialOptions" JSONB DEFAULT '[]'::jsonb
     `);
 
     await pool.query(`
@@ -188,7 +204,7 @@ const initDB = async () => {
       )
     `);
 
-    await seedTableIfEmpty('products', ['category', 'name', 'priceStr', 'priceNum', 'oldPrice', 'img', 'badge', 'desc', 'isRecommended', 'isPopular', 'isOnlineSpecial', 'detailImages'], withJsonbDetailImages(seedProducts));
+    await seedTableIfEmpty('products', ['category', 'name', 'priceStr', 'priceNum', 'oldPrice', 'img', 'badge', 'desc', 'isRecommended', 'isPopular', 'isOnlineSpecial', 'detailImages', 'colorVariants', 'materialOptions'], withJsonbDetailImages(seedProducts));
     await seedTableIfEmpty('categories', ['name', 'description', 'sortOrder'], seedCategories);
     await seedTableIfEmpty('customers', ['name', 'email', 'phone', 'ordersCount', 'totalSpentNum'], seedCustomers);
     await seedTableIfEmpty('orders', ['orderNo', 'customerName', 'date', 'totalStr', 'totalNum', 'status', 'statusColor'], seedOrders);
@@ -273,41 +289,47 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
-    const { category, categoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, detailImages } = req.body;
-    const missingFields = hasMissingFields(req.body, ['name', 'priceStr', 'img', 'desc']).concat(!categoryId && !category ? ['category'] : []);
-    if (missingFields.length > 0) {
-      return res.status(400).json({ error: `Zorunlu alanlar eksik: ${missingFields.join(', ')}` });
-    }
+    const { category, categoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, detailImages, colorVariants, materialOptions } = req.body;
+    
+    // detailImages artık bir array olmalı, değilse boş array yap
+    const imagesArray = Array.isArray(detailImages) ? detailImages : [];
+    const variantsArray = Array.isArray(colorVariants) ? colorVariants : [];
+    const materialsArray = Array.isArray(materialOptions) ? materialOptions : [];
 
     const categoryRecord = await resolveCategory({ categoryId, category });
     const resolvedCategoryId = categoryRecord?.id ?? categoryId ?? null;
     const resolvedCategoryName = categoryRecord?.name ?? category ?? null;
 
     const { rows } = await pool.query(
-      `INSERT INTO products (category, "categoryId", name, "priceStr", "priceNum", "oldPrice", img, badge, "desc", "isRecommended", "isPopular", "isOnlineSpecial", "detailImages")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-      [resolvedCategoryName, resolvedCategoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, JSON.stringify(detailImages ?? [])]
+      `INSERT INTO products (category, "categoryId", name, "priceStr", "priceNum", "oldPrice", img, badge, "desc", "isRecommended", "isPopular", "isOnlineSpecial", "detailImages", "colorVariants", "materialOptions")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      [resolvedCategoryName, resolvedCategoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, JSON.stringify(imagesArray), JSON.stringify(variantsArray), JSON.stringify(materialsArray)]
     );
     res.json(mapProductRow(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
 app.put('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { category, categoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, detailImages } = req.body;
+    const { category, categoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, detailImages, colorVariants, materialOptions } = req.body;
     const missingFields = hasMissingFields(req.body, ['name', 'priceStr', 'img', 'desc']).concat(!categoryId && !category ? ['category'] : []);
     if (missingFields.length > 0) {
       return res.status(400).json({ error: `Zorunlu alanlar eksik: ${missingFields.join(', ')}` });
     }
+
+    const imagesArray = Array.isArray(detailImages) ? detailImages : [];
+    const variantsArray = Array.isArray(colorVariants) ? colorVariants : [];
+    const materialsArray = Array.isArray(materialOptions) ? materialOptions : [];
 
     const categoryRecord = await resolveCategory({ categoryId, category });
     const resolvedCategoryId = categoryRecord?.id ?? categoryId ?? null;
     const resolvedCategoryName = categoryRecord?.name ?? category ?? null;
 
     const { rows } = await pool.query(
-      `UPDATE products SET category=$1, "categoryId"=$2, name=$3, "priceStr"=$4, "priceNum"=$5, "oldPrice"=$6, img=$7, badge=$8, "desc"=$9, "isRecommended"=$10, "isPopular"=$11, "isOnlineSpecial"=$12, "detailImages"=$13 WHERE id=$14 RETURNING *`,
-      [resolvedCategoryName, resolvedCategoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, JSON.stringify(detailImages ?? []), id]
+      `UPDATE products SET category=$1, "categoryId"=$2, name=$3, "priceStr"=$4, "priceNum"=$5, "oldPrice"=$6, img=$7, badge=$8, "desc"=$9, "isRecommended"=$10, "isPopular"=$11, "isOnlineSpecial"=$12, "detailImages"=$13, "colorVariants"=$14, "materialOptions"=$15 WHERE id=$16 RETURNING *`,
+      [resolvedCategoryName, resolvedCategoryId, name, priceStr, priceNum, oldPrice, img, badge, desc, isRecommended, isPopular, isOnlineSpecial, JSON.stringify(imagesArray), JSON.stringify(variantsArray), JSON.stringify(materialsArray), id]
     );
     if (!rows[0]) {
       return res.status(404).json({ error: 'Ürün bulunamadı.' });

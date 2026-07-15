@@ -115,7 +115,7 @@ function ProductCard({ product, onNavigateDetail, onAddToCart }) {
           </div>
           <button
             type="button"
-            onClick={() => onAddToCart(product.id, 1, 'Standart', 'Standart')}
+            onClick={() => onAddToCart(product.id, 1, product.img, [], '')}
             className="w-10 h-10 rounded-full bg-gray-100 text-brand-main flex items-center justify-center hover:bg-brand-main hover:text-white transition-colors flex-shrink-0"
             title="Sepete Ekle"
           >
@@ -170,13 +170,57 @@ export default function App() {
   const sidebarMegaCloseTimer = useRef(null);
   const desktopMegaCloseTimer = useRef(null);
 
-  const [selectedColor, setSelectedColor] = useState('Antrasit Gri');
-  const [selectedMaterial, setSelectedMaterial] = useState('Boşluk Dlanrı');
+  const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [selectedDetailImageIndex, setSelectedDetailImageIndex] = useState(0);
 
   const selectedProduct = useMemo(() => products.find((product) => product.id === selectedProductId) ?? products[0], [selectedProductId, products]);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + (parseInt((item.priceStr || '0').replace(/[^0-9]/g, ''), 10) || 0) * item.qty, 0);
+
+  const productColorVariants = useMemo(() => {
+    const explicitVariants = Array.isArray(selectedProduct?.colorVariants)
+      ? selectedProduct.colorVariants
+          .filter((variant) => variant && variant.img)
+          .map((variant, index) => ({
+            name: String(variant.name ?? '').trim() || `Renk ${index + 1}`,
+            img: variant.img
+          }))
+      : [];
+
+    if (explicitVariants.length > 0) {
+      return explicitVariants;
+    }
+
+    if (Array.isArray(selectedProduct?.detailImages) && selectedProduct.detailImages.length > 1) {
+      return selectedProduct.detailImages.map((img, index) => ({ name: `Renk ${index + 1}`, img }));
+    }
+
+    return [];
+  }, [selectedProduct]);
+
+  const productMaterialOptions = useMemo(() => {
+    if (!Array.isArray(selectedProduct?.materialOptions)) {
+      return [];
+    }
+
+    return selectedProduct.materialOptions
+      .map((option) => String(option ?? '').trim())
+      .filter(Boolean);
+  }, [selectedProduct]);
+
+  const detailThumbsImages = useMemo(() => {
+    if (productColorVariants.length > 0) {
+      return productColorVariants.map((variant) => variant.img);
+    }
+
+    if (Array.isArray(selectedProduct?.detailImages) && selectedProduct.detailImages.length > 0) {
+      return selectedProduct.detailImages;
+    }
+
+    return selectedProduct?.img ? [selectedProduct.img] : [];
+  }, [productColorVariants, selectedProduct]);
+
+  const activeDetailImage = detailThumbsImages[selectedDetailImageIndex] || selectedProduct?.img;
 
   const categoryProducts = useMemo(() => {
     const filtered = products.filter((product) => product.category === categoryName || categoryName === 'Tüm Ürünler' || product.name.includes(categoryName));
@@ -295,8 +339,7 @@ export default function App() {
     if (nextPage === 'detail') {
       setSelectedProductId(param);
       setCurrentQty(1);
-      setSelectedColor('Antrasit Gri');
-      setSelectedMaterial('Boşluk Dlanrı');
+      setSelectedMaterials([]);
       setSelectedDetailImageIndex(0);
     }
 
@@ -305,16 +348,20 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const addToCart = (productId, qty, color, material) => {
+  const addToCart = (productId, qty, image, materials = [], colorName = '') => {
     const product = products.find((item) => item.id === productId);
     if (!product) return;
 
+    const selectedMaterialsList = Array.isArray(materials) ? materials.filter(Boolean) : [];
+    const selectedImage = image || product.img;
+    const cartKey = [productId, colorName || '', selectedImage || '', ...selectedMaterialsList].join('|');
+
     setCart((current) => {
-      const existingItem = current.find((item) => item.id === productId && item.color === color && item.material === material);
+      const existingItem = current.find((item) => item.cartKey === cartKey);
       if (existingItem) {
-        return current.map((item) => (item.id === productId && item.color === color && item.material === material ? { ...item, qty: item.qty + qty } : item));
+        return current.map((item) => (item.cartKey === cartKey ? { ...item, qty: item.qty + qty } : item));
       }
-      return [...current, { ...product, qty, color, material }];
+      return [...current, { ...product, img: selectedImage, qty, selectedMaterials: selectedMaterialsList, selectedColorName: colorName, cartKey }];
     });
 
     addToast(`${product.name} sepete eklendi!`);
@@ -323,17 +370,21 @@ export default function App() {
     }
   };
 
-  const removeFromCart = (productId) => {
-    setCart((current) => current.filter((item) => item.id !== productId));
+  const removeFromCart = (cartKey) => {
+    setCart((current) => current.filter((item) => item.cartKey !== cartKey));
   };
 
-  const updateCartItemQty = (productId, nextQty) => {
+  const updateCartItemQty = (cartKey, nextQty) => {
     if (nextQty < 1) return;
-    setCart((current) => current.map((item) => (item.id === productId ? { ...item, qty: nextQty } : item)));
+    setCart((current) => current.map((item) => (item.cartKey === cartKey ? { ...item, qty: nextQty } : item)));
   };
+
+  useEffect(() => {
+    setSelectedDetailImageIndex(0);
+    setSelectedMaterials([]);
+  }, [selectedProductId]);
 
   const hero = slides[heroSlide];
-  const detailThumbsImages = selectedProduct?.detailImages || Array.from({ length: 4 }, (_, index) => selectedProduct?.img);
   const detailThumbs = Array.from({ length: detailThumbsImages.length }, (_, index) => index);
 
   // ADMIN PANELI ÇAĞRISI (Ürünleri ve CRUD fonksiyonlarını prop olarak geçiyoruz)
@@ -745,7 +796,7 @@ export default function App() {
               <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
                 <div className="w-full lg:w-1/2">
                   <div className="rounded-xl overflow-hidden bg-gray-50 mb-6 h-[400px] md:h-[500px] flex items-center justify-center relative shadow-sm border border-gray-100">
-                    <img src={detailThumbsImages[selectedDetailImageIndex] || selectedProduct.img} alt={selectedProduct.name} className="w-full h-full object-cover transition-opacity duration-300" />
+                    <img src={activeDetailImage || selectedProduct.img} alt={selectedProduct.name} className="w-full h-full object-cover transition-opacity duration-300" />
                   </div>
                   <div className="grid grid-cols-5 gap-3 md:gap-4 thumbnails-gallery">
                     {detailThumbs.map((index) => (
@@ -784,37 +835,48 @@ export default function App() {
                     <p className="text-sm text-gray-600 mt-2">KDV Dahildir. Peşin fiyatına 3 taksit fırsatı!</p>
                   </div>
 
-                  <div className="mb-8">
-                    <h4 className="font-bold text-gray-800 mb-4 text-lg">Ürün Selesi <span className="text-gray-500 font-medium text-sm ml-2">({selectedColor})</span></h4>
-                    <div className="flex flex-wrap gap-4">
-                        {['Antrasit Gri', 'Krem Beyaz', 'Derin Mavi'].map(color => (
-                            <button 
-                                key={color} 
-                                type="button" 
-                                onClick={() => setSelectedColor(color)}
-                                className={`px-5 py-3 rounded-lg font-semibold text-sm transition border-2 flex items-center gap-2 ${selectedColor === color ? 'border-brand-main bg-brand-main text-white shadow-md' : 'border-gray-200 bg-white hover:border-brand-main hover:text-brand-main'}`}
-                            >
-                                {color === 'Derin Mavi' ? <i className="fas fa-check text-xs"/> : null} {color}
-                            </button>
+                  {productColorVariants.length > 1 ? (
+                    <div className="mb-8">
+                      <h4 className="font-bold text-gray-800 mb-4 text-lg">Ürün Renkleri <span className="text-gray-500 font-medium text-sm ml-2">({productColorVariants[selectedDetailImageIndex]?.name || productColorVariants[0]?.name})</span></h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {productColorVariants.map((variant, index) => (
+                          <button
+                            key={`${variant.name}-${index}`}
+                            type="button"
+                            onClick={() => setSelectedDetailImageIndex(index)}
+                            className={`rounded-xl border-2 p-2 text-left transition shadow-sm ${index === selectedDetailImageIndex ? 'border-brand-main ring-2 ring-brand-main bg-brand-accent' : 'border-gray-200 bg-white hover:border-brand-main'}`}
+                          >
+                            <div className="h-24 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden mb-2">
+                              <img src={variant.img} alt={variant.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+                            <div className="text-sm font-semibold text-gray-800">{variant.name}</div>
+                          </button>
                         ))}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
-                  <div className="mb-10">
-                    <h4 className="font-bold text-gray-800 mb-4 text-lg">Malzeme Seçimi <span className="text-gray-500 font-medium text-sm ml-2">({selectedMaterial})</span></h4>
-                    <div className="flex flex-wrap gap-4">
-                        {['Boşluk Dlanrı'].map(mat => (
-                            <button 
-                                key={mat} 
-                                type="button" 
-                                onClick={() => setSelectedMaterial(mat)}
-                                className={`px-5 py-3 rounded-lg font-semibold text-sm transition border-2 ${selectedMaterial === mat ? 'border-brand-main bg-brand-main text-white shadow-md' : 'border-gray-200 bg-white hover:border-brand-main hover:text-brand-main'}`}
+                  {productMaterialOptions.length > 0 ? (
+                    <div className="mb-10">
+                      <h4 className="font-bold text-gray-800 mb-4 text-lg">Malzeme Seçimi</h4>
+                      <p className="text-sm text-gray-500 mb-4">İstediğiniz parçaları birden fazla seçebilirsiniz.</p>
+                      <div className="flex flex-wrap gap-4">
+                        {productMaterialOptions.map((material) => {
+                          const isSelected = selectedMaterials.includes(material);
+                          return (
+                            <button
+                              key={material}
+                              type="button"
+                              onClick={() => setSelectedMaterials((current) => (current.includes(material) ? current.filter((item) => item !== material) : [...current, material]))}
+                              className={`px-5 py-3 rounded-lg font-semibold text-sm transition border-2 ${isSelected ? 'border-brand-main bg-brand-main text-white shadow-md' : 'border-gray-200 bg-white hover:border-brand-main hover:text-brand-main'}`}
                             >
-                                {mat}
+                              {material}
                             </button>
-                        ))}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
                   <div className="flex flex-col sm:flex-row gap-6 mb-12 p-6 bg-white rounded-xl border border-gray-100 shadow-sm">
                     <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden w-full sm:w-40 h-16 bg-gray-50">
@@ -822,7 +884,7 @@ export default function App() {
                       <input type="text" value={currentQty} className="w-1/3 h-full text-center border-none focus:outline-none font-bold text-gray-900 bg-white text-xl" readOnly />
                       <button type="button" className="w-1/3 h-full bg-gray-50 hover:bg-gray-200 text-gray-600 font-bold text-2xl transition" onClick={() => setCurrentQty((value) => value + 1)} title="Arttır">+</button>
                     </div>
-                    <button type="button" onClick={() => addToCart(selectedProduct.id, currentQty, selectedColor, selectedMaterial)} className="flex-1 bg-brand-main text-white rounded-xl font-bold text-xl hover:bg-brand-secondary transition-all shadow-lg hover:shadow-xl h-16 flex justify-center items-center gap-3 w-full">
+                    <button type="button" onClick={() => addToCart(selectedProduct.id, currentQty, activeDetailImage || selectedProduct.img, selectedMaterials, productColorVariants[selectedDetailImageIndex]?.name || '')} className="flex-1 bg-brand-main text-white rounded-xl font-bold text-xl hover:bg-brand-secondary transition-all shadow-lg hover:shadow-xl h-16 flex justify-center items-center gap-3 w-full">
                       <i className="fas fa-shopping-bag text-2xl" /> SEPETE EKLE
                     </button>
                   </div>
@@ -936,22 +998,23 @@ export default function App() {
                     <div>
                       <h3 className="text-xl font-bold border-b pb-4 mb-4">Sepetinizdeki Ürünler ({cartCount})</h3>
                       {cart.map((item) => (
-                        <div key={`${item.id}-${item.color}-${item.material}`} className="flex flex-col sm:flex-row items-center border-b border-gray-100 py-4 gap-4">
+                        <div key={item.cartKey} className="flex flex-col sm:flex-row items-center border-b border-gray-100 py-4 gap-4">
                           <div className="w-24 h-24 bg-gray-50 rounded flex items-center justify-center p-2">
                             <img src={item.img} alt={item.name} className="max-w-full max-h-full object-contain" />
                           </div>
                           <div className="flex-grow">
                             <h4 className="font-bold text-gray-800">{item.name}</h4>
-                            {item.color && item.material ? <span className="text-xs text-gray-500 block mt-1">{item.color} | {item.material}</span> : null}
+                            {item.selectedColorName ? <span className="text-xs text-gray-500 block mt-1">Renk: {item.selectedColorName}</span> : null}
+                            {Array.isArray(item.selectedMaterials) && item.selectedMaterials.length > 0 ? <span className="text-xs text-gray-500 block mt-1">Malzemeler: {item.selectedMaterials.join(', ')}</span> : null}
                             <div className="text-brand-main font-extrabold mt-1">{item.priceStr}</div>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex border border-gray-300 rounded overflow-hidden w-24">
-                              <button type="button" className="w-1/3 bg-gray-50 hover:bg-gray-200 font-bold" onClick={() => updateCartItemQty(item.id, item.qty - 1)}>-</button>
+                              <button type="button" className="w-1/3 bg-gray-50 hover:bg-gray-200 font-bold" onClick={() => updateCartItemQty(item.cartKey, item.qty - 1)}>-</button>
                               <input type="text" value={item.qty} className="w-1/3 text-center border-none focus:outline-none text-sm font-bold" readOnly />
-                              <button type="button" className="w-1/3 bg-gray-50 hover:bg-gray-200 font-bold" onClick={() => updateCartItemQty(item.id, item.qty + 1)}>+</button>
+                              <button type="button" className="w-1/3 bg-gray-50 hover:bg-gray-200 font-bold" onClick={() => updateCartItemQty(item.cartKey, item.qty + 1)}>+</button>
                             </div>
-                            <button type="button" onClick={() => removeFromCart(item.id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Sil">
+                            <button type="button" onClick={() => removeFromCart(item.cartKey)} className="text-gray-400 hover:text-red-500 transition-colors" title="Sil">
                               <i className="far fa-trash-alt text-lg" />
                             </button>
                           </div>

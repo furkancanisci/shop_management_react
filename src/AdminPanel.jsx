@@ -32,7 +32,9 @@ const fieldLabels = {
   category: 'Kategori',
   priceStr: 'Fiyat (Örn: 24.500 TL)',
   oldPrice: 'Eski Fiyat (Örn: 28.000 TL)',
-  img: 'Ürün Görseli (Bilgisayardan Seç)',
+  img: 'Ürün Görselleri (Bir veya Daha Fazla Seç)',
+  colorVariants: 'Ürün Renkleri',
+  materialOptions: 'Malzeme Seçenekleri',
   badge: 'Rozet (Örn: YENİ)',
   desc: 'Açıklama',
   isRecommended: 'Sizin İçin Seçtiklerimiz Vitrini',
@@ -60,6 +62,8 @@ const formConfigs = {
     { name: 'priceStr', type: 'text' },
     { name: 'oldPrice', type: 'text' },
     { name: 'img', type: 'image-upload' }, // Dosya yükleme tipi olarak değiştirdik
+    { name: 'colorVariants', type: 'variant-list' },
+    { name: 'materialOptions', type: 'option-list' },
     { name: 'badge', type: 'text' },
     { name: 'desc', type: 'textarea' },
     { name: 'isRecommended', type: 'checkbox' },
@@ -102,6 +106,9 @@ const emptyForms = {
     priceStr: '',
     oldPrice: '',
     img: '',
+    detailImages: [],
+    colorVariants: [],
+    materialOptions: [],
     badge: '',
     desc: '',
     isRecommended: false,
@@ -115,7 +122,7 @@ const emptyForms = {
 };
 
 const requiredFields = {
-  products: ['name', 'categoryId', 'priceStr', 'img', 'desc'],
+  products: ['name', 'categoryId', 'priceStr', 'desc'],
   customers: ['name', 'email', 'phone'],
   orders: ['orderNo', 'customerName', 'date', 'totalStr', 'status'],
   staff: ['name', 'role', 'email', 'status'],
@@ -129,6 +136,19 @@ function formatMoney(value) {
 
 function parseMoney(value) {
   return Number(String(value ?? '').replace(/[^0-9]/g, '')) || 0;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Görsel okunamadı.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function createEmptyColorVariant() {
+  return { name: '', img: '' };
 }
 
 function AdminProductCard({ product, onEdit, onDelete }) {
@@ -245,9 +265,20 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
   const openModal = (type, item = null) => {
     setEditingType(type);
     setEditingItem(item);
-    const nextItem = item ? { ...emptyForms[type], ...item } : emptyForms[type];
+    const nextItem = item ? { ...emptyForms[type], ...item } : { ...emptyForms[type] };
     if (type === 'products' && item) {
+      const existingImages = Array.isArray(item.detailImages) && item.detailImages.length > 0 ? item.detailImages : item.img ? [item.img] : [];
       nextItem.categoryId = item.categoryId ?? categories.find((category) => category.name === item.category)?.id ?? '';
+      nextItem.detailImages = [...existingImages];
+      nextItem.colorVariants = Array.isArray(item.colorVariants) ? item.colorVariants : [];
+      nextItem.materialOptions = Array.isArray(item.materialOptions) ? item.materialOptions : [];
+      nextItem.img = item.img || existingImages[0] || '';
+    }
+    if (type === 'products' && !item) {
+      nextItem.detailImages = [];
+      nextItem.colorVariants = [];
+      nextItem.materialOptions = [];
+      nextItem.img = '';
     }
     setFormData(nextItem);
     setValidationErrors({});
@@ -267,11 +298,30 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
 
   const normalizePayload = (type, payload) => {
     if (type === 'products') {
+      const detailImages = Array.isArray(payload.detailImages)
+        ? payload.detailImages.filter(Boolean)
+        : [];
+      const colorVariants = Array.isArray(payload.colorVariants)
+        ? payload.colorVariants
+            .map((variant) => ({
+              name: String(variant?.name ?? '').trim(),
+              img: variant?.img || ''
+            }))
+            .filter((variant) => variant.name || variant.img)
+        : [];
+      const materialOptions = Array.isArray(payload.materialOptions)
+        ? payload.materialOptions.map((option) => String(option ?? '').trim()).filter(Boolean)
+        : [];
+      const mainImage = colorVariants[0]?.img || detailImages[0] || payload.img || '';
+      const primaryImage = detailImages[0] || payload.img || '';
       return {
         ...payload,
         categoryId: Number(payload.categoryId) || null,
         priceNum: parseMoney(payload.priceStr),
-        detailImages: payload.detailImages ?? editingItem?.detailImages ?? []
+        img: mainImage,
+        detailImages: detailImages.length > 0 ? detailImages : mainImage ? [mainImage] : [],
+        colorVariants,
+        materialOptions
       };
     }
     if (type === 'customers') {
@@ -290,6 +340,15 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
     try {
       const payload = normalizePayload(editingType, formData);
       const missingFields = getMissingFields(editingType, payload);
+
+      if (editingType === 'products') {
+        const hasAnyImage = Boolean(payload.img) || (Array.isArray(payload.detailImages) && payload.detailImages.length > 0) || (Array.isArray(payload.colorVariants) && payload.colorVariants.some((variant) => variant.img));
+        if (!hasAnyImage) {
+          setValidationErrors({ img: 'En az bir ürün görseli ekleyin.' });
+          addToast('En az bir ürün görseli ekleyin.');
+          return;
+        }
+      }
 
       if (missingFields.length > 0) {
         const nextErrors = Object.fromEntries(missingFields.map((field) => [field, 'Bu alan zorunludur.']));
@@ -613,37 +672,184 @@ export default function AdminPanel({ navigate, addToast, products, addProduct, u
                     {requiredFields[editingType].includes(field.name) ? <span className="text-red-500 ml-1">*</span> : null}
                   </label>
                   
-                  {/* --- DOSYA YÜKLEME (BASE64) EKLENTİSİ --- */}
                   {field.type === 'image-upload' ? (
                     <div className="flex flex-col gap-2">
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         className={`w-full border rounded p-2 text-sm ${validationErrors[field.name] ? 'border-red-400 ring-1 ring-red-200' : ''}`}
-                        onChange={(event) => {
-                          const file = event.target.files[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              // Resmi Base64 stringine çevirip formData'ya ekliyoruz
-                              setFormData({ ...formData, [field.name]: reader.result });
-                            };
-                            reader.readAsDataURL(file);
+                        onChange={async (event) => {
+                          const files = Array.from(event.target.files || []);
+                          if (files.length === 0) return;
+
+                          try {
+                            const nextImages = await Promise.all(files.map((file) => readFileAsDataUrl(file)));
+                            setFormData((current) => {
+                              const currentImages = Array.isArray(current.detailImages) ? current.detailImages : [];
+                              const mergedImages = [...currentImages, ...nextImages].filter(Boolean);
+                              return {
+                                ...current,
+                                detailImages: mergedImages,
+                                img: mergedImages[0] || ''
+                              };
+                            });
+                            event.target.value = '';
+                          } catch (error) {
+                            console.error('Görsel yükleme hatası:', error);
+                            addToast('Görseller yüklenemedi.');
                           }
                         }}
                       />
-                      {formData[field.name] ? (
-                        <div className="mt-2 relative inline-block w-32 h-32 border border-gray-200 rounded p-1">
-                           <img src={formData[field.name]} alt="Önizleme" className="w-full h-full object-contain rounded" />
-                           <button 
-                             type="button" 
-                             onClick={() => setFormData({ ...formData, [field.name]: '' })} 
-                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
-                           >
-                             <i className="fas fa-times"></i>
-                           </button>
+                      {Array.isArray(formData.detailImages) && formData.detailImages.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+                          {formData.detailImages.map((image, index) => (
+                            <div key={`${image.slice(0, 24)}-${index}`} className="relative border border-gray-200 rounded p-1 bg-gray-50 aspect-square">
+                              <img src={image} alt={`Önizleme ${index + 1}`} className="w-full h-full object-contain rounded" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData((current) => {
+                                    const nextImages = (current.detailImages || []).filter((_, imageIndex) => imageIndex !== index);
+                                    return {
+                                      ...current,
+                                      detailImages: nextImages,
+                                      img: nextImages[0] || ''
+                                    };
+                                  });
+                                }}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center shadow"
+                                title="Görseli kaldır"
+                              >
+                                <i className="fas fa-times" />
+                              </button>
+                              {index === 0 ? (
+                                <span className="absolute bottom-2 left-2 bg-brand-main text-white text-[10px] font-bold px-2 py-1 rounded shadow">
+                                  Ana görsel
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
                         </div>
                       ) : null}
+                      <p className="text-[11px] text-gray-500">İlk seçilen görsel ana görsel olur. Diğerleri ürün detayında gösterilir.</p>
+                    </div>
+                  ) : field.type === 'variant-list' ? (
+                    <div className="space-y-3">
+                      {(formData.colorVariants || []).map((variant, index) => (
+                        <div key={`${variant.name || 'variant'}-${index}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-start border border-gray-100 rounded-lg p-3 bg-gray-50">
+                          <div>
+                            <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">Renk Adı</label>
+                            <input
+                              type="text"
+                              className="w-full border rounded p-2 text-sm"
+                              value={variant.name ?? ''}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setFormData((current) => {
+                                  const nextVariants = [...(current.colorVariants || [])];
+                                  nextVariants[index] = { ...nextVariants[index], name: nextValue };
+                                  return { ...current, colorVariants: nextVariants };
+                                });
+                              }}
+                              placeholder="Örn: Antrasit Gri"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">Renk Görseli</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="w-full border rounded p-2 text-sm"
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0];
+                                if (!file) return;
+
+                                try {
+                                  const image = await readFileAsDataUrl(file);
+                                  setFormData((current) => {
+                                    const nextVariants = [...(current.colorVariants || [])];
+                                    nextVariants[index] = { ...nextVariants[index], img: image };
+                                    return { ...current, colorVariants: nextVariants };
+                                  });
+                                  event.target.value = '';
+                                } catch (error) {
+                                  console.error('Renk görseli yükleme hatası:', error);
+                                  addToast('Renk görseli yüklenemedi.');
+                                }
+                              }}
+                            />
+                            {variant.img ? (
+                              <div className="mt-2 w-20 h-20 border border-gray-200 rounded p-1 bg-white">
+                                <img src={variant.img} alt={variant.name || `Renk ${index + 1}`} className="w-full h-full object-contain" />
+                              </div>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFormData((current) => ({
+                              ...current,
+                              colorVariants: (current.colorVariants || []).filter((_, variantIndex) => variantIndex !== index)
+                            }))}
+                            className="h-10 px-3 rounded bg-red-50 text-red-600 font-bold text-sm self-end md:self-start"
+                          >
+                            Sil
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setFormData((current) => ({
+                          ...current,
+                          colorVariants: [...(current.colorVariants || []), createEmptyColorVariant()]
+                        }))}
+                        className="px-4 py-2 rounded bg-brand-accent text-brand-main font-bold text-sm"
+                      >
+                        Renk Ekle
+                      </button>
+                      <p className="text-[11px] text-gray-500">Tek renkli ürünlerde bu alanı boş bırakabilirsiniz. Birden fazla renk girerseniz detay sayfasında seçim görünür.</p>
+                    </div>
+                  ) : field.type === 'option-list' ? (
+                    <div className="space-y-3">
+                      {(formData.materialOptions || []).map((material, index) => (
+                        <div key={`${material || 'material'}-${index}`} className="flex gap-2">
+                          <input
+                            type="text"
+                            className="w-full border rounded p-2 text-sm"
+                            value={material}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setFormData((current) => {
+                                const nextMaterials = [...(current.materialOptions || [])];
+                                nextMaterials[index] = nextValue;
+                                return { ...current, materialOptions: nextMaterials };
+                              });
+                            }}
+                            placeholder="Örn: Yatak"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData((current) => ({
+                              ...current,
+                              materialOptions: (current.materialOptions || []).filter((_, materialIndex) => materialIndex !== index)
+                            }))}
+                            className="px-3 rounded bg-red-50 text-red-600 font-bold text-sm"
+                          >
+                            Sil
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setFormData((current) => ({
+                          ...current,
+                          materialOptions: [...(current.materialOptions || []), '']
+                        }))}
+                        className="px-4 py-2 rounded bg-brand-accent text-brand-main font-bold text-sm"
+                      >
+                        Malzeme Ekle
+                      </button>
+                      <p className="text-[11px] text-gray-500">Örnek: Yatak, Dolap, Komodin. Müşteri detay sayfasında birden fazla seçim yapabilir.</p>
                     </div>
 
                   ) : field.type === 'textarea' ? (
